@@ -1,0 +1,17 @@
+{
+  "name": "rule-engine",
+  "version": "1.0.0",
+  "description": "Lambda function to evaluate metrics and create alerts",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.490.0",
+    "@aws-sdk/lib-dynamodb": "^3.490.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}

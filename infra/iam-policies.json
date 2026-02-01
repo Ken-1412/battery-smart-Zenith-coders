@@ -1,0 +1,154 @@
+{
+  "MetricsIngestionLambdaPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "DynamoDBMetricsTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem",
+          "dynamodb:Query"
+        ],
+        "Resource": [
+          "arn:aws:dynamodb:*:*:table/ai-ops-metrics",
+          "arn:aws:dynamodb:*:*:table/ai-ops-metrics/index/*"
+        ]
+      },
+      {
+        "Sid": "DynamoDBAlertsTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ],
+        "Resource": [
+          "arn:aws:dynamodb:*:*:table/ai-ops-alerts",
+          "arn:aws:dynamodb:*:*:table/ai-ops-alerts/index/*"
+        ]
+      },
+      {
+        "Sid": "DynamoDBAuditTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem"
+        ],
+        "Resource": "arn:aws:dynamodb:*:*:table/ai-ops-audit"
+      },
+      {
+        "Sid": "SNSPublishAlerts",
+        "Effect": "Allow",
+        "Action": [
+          "sns:Publish"
+        ],
+        "Resource": "arn:aws:sns:*:*:ops-alerts"
+      }
+    ]
+  },
+  "RuleEngineLambdaPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "DynamoDBMetricsTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ],
+        "Resource": [
+          "arn:aws:dynamodb:*:*:table/ai-ops-metrics",
+          "arn:aws:dynamodb:*:*:table/ai-ops-metrics/index/*"
+        ]
+      },
+      {
+        "Sid": "DynamoDBAlertsTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ],
+        "Resource": [
+          "arn:aws:dynamodb:*:*:table/ai-ops-alerts",
+          "arn:aws:dynamodb:*:*:table/ai-ops-alerts/index/*"
+        ]
+      },
+      {
+        "Sid": "DynamoDBAuditTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem"
+        ],
+        "Resource": "arn:aws:dynamodb:*:*:table/ai-ops-audit"
+      }
+    ]
+  },
+  "AlertsHandlerLambdaPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "DynamoDBAlertsTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:UpdateItem"
+        ],
+        "Resource": [
+          "arn:aws:dynamodb:*:*:table/ai-ops-alerts",
+          "arn:aws:dynamodb:*:*:table/ai-ops-alerts/index/*"
+        ]
+      },
+      {
+        "Sid": "DynamoDBDecisionsTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem",
+          "dynamodb:Query"
+        ],
+        "Resource": [
+          "arn:aws:dynamodb:*:*:table/ai-ops-decisions",
+          "arn:aws:dynamodb:*:*:table/ai-ops-decisions/index/*"
+        ]
+      },
+      {
+        "Sid": "DynamoDBAuditTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem"
+        ],
+        "Resource": "arn:aws:dynamodb:*:*:table/ai-ops-audit"
+      },
+      {
+        "Sid": "StepFunctionsStartExecution",
+        "Effect": "Allow",
+        "Action": [
+          "states:StartExecution"
+        ],
+        "Resource": "arn:aws:states:*:*:stateMachine:alert-workflow"
+      }
+    ]
+  },
+  "StepFunctionsTriggerLambdaPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "SNSPublishAlerts",
+        "Effect": "Allow",
+        "Action": [
+          "sns:Publish"
+        ],
+        "Resource": "arn:aws:sns:*:*:ops-alerts"
+      },
+      {
+        "Sid": "DynamoDBAuditTable",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:PutItem"
+        ],
+        "Resource": "arn:aws:dynamodb:*:*:table/ai-ops-audit"
+      }
+    ]
+  }
+}

@@ -1,0 +1,291 @@
+service: ai-ops-mvp
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+  
+  environment:
+    STAGE: ${self:provider.stage}
+    METRICS_TABLE: ${self:custom.tables.metrics}
+    ALERTS_TABLE: ${self:custom.tables.alerts}
+    AUDIT_TABLE: ${self:custom.tables.audit}
+    DECISIONS_TABLE: ${self:custom.tables.decisions}
+    SNS_TOPIC_ARN: 
+      Ref: OpsAlertsTopic
+  
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:UpdateItem
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.metrics}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.metrics}/index/*
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.alerts}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.alerts}/index/*
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.audit}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.audit}/index/*
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.decisions}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tables.decisions}/index/*
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource:
+            - arn:aws:sns:${self:provider.region}:*:ops-alerts
+            - Ref: OpsAlertsTopic
+        - Effect: Allow
+          Action:
+            - states:StartExecution
+          Resource:
+            - arn:aws:states:${self:provider.region}:*:stateMachine:alert-workflow-${self:provider.stage}
+  
+
+custom:
+  tables:
+    metrics: ai-ops-metrics-${self:provider.stage}
+    alerts: ai-ops-alerts-${self:provider.stage}
+    audit: ai-ops-audit-${self:provider.stage}
+    decisions: ai-ops-decisions-${self:provider.stage}
+  serverless-offline:
+    httpPort: 4000
+
+functions:
+  metricsIngestion:
+    handler: backend/lambdas/metrics-ingestion/index.handler
+    description: Ingest station metrics and trigger rule engine
+    events:
+      - http:
+          path: /metrics
+          method: post
+          cors: true
+    environment:
+      METRICS_TABLE: ${self:custom.tables.metrics}
+      ALERTS_TABLE: ${self:custom.tables.alerts}
+      AUDIT_TABLE: ${self:custom.tables.audit}
+      SNS_TOPIC_ARN: 
+        Ref: OpsAlertsTopic
+
+  alertsHandler:
+    handler: backend/lambdas/alerts-handler/index.handler
+    description: Handle alert retrieval and decision making
+    events:
+      - http:
+          path: /alerts
+          method: get
+          cors: true
+      - http:
+          path: /alerts/decision
+          method: post
+          cors: true
+    environment:
+      ALERTS_TABLE: ${self:custom.tables.alerts}
+      DECISIONS_TABLE: ${self:custom.tables.decisions}
+      AUDIT_TABLE: ${self:custom.tables.audit}
+
+  ruleEngine:
+    handler: backend/lambdas/rule-engine/index.handler
+    description: Scheduled rule engine to evaluate metrics and create alerts
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+          enabled: true
+    environment:
+      METRICS_TABLE: ${self:custom.tables.metrics}
+      ALERTS_TABLE: ${self:custom.tables.alerts}
+      AUDIT_TABLE: ${self:custom.tables.audit}
+
+resources:
+  Resources:
+    MetricsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tables.metrics}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: stationId
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: stationId
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          Enabled: true
+          AttributeName: ttl
+        Tags:
+          - Key: Project
+            Value: ai-ops-mvp
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+    AlertsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tables.alerts}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: alertId
+            AttributeType: S
+          - AttributeName: status
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: N
+        KeySchema:
+          - AttributeName: alertId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: StatusIndex
+            KeySchema:
+              - AttributeName: status
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        Tags:
+          - Key: Project
+            Value: ai-ops-mvp
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+    AuditTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tables.audit}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: taskId
+            AttributeType: S
+          - AttributeName: alertId
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+          - AttributeName: actionType
+            AttributeType: S
+        KeySchema:
+          - AttributeName: taskId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AlertIndex
+            KeySchema:
+              - AttributeName: alertId
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: TimeIndex
+            KeySchema:
+              - AttributeName: actionType
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          Enabled: true
+          AttributeName: ttl
+        Tags:
+          - Key: Project
+            Value: ai-ops-mvp
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+    DecisionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tables.decisions}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: decisionId
+            AttributeType: S
+          - AttributeName: alertId
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: decisionId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AlertIndex
+            KeySchema:
+              - AttributeName: alertId
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: UserIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        Tags:
+          - Key: Project
+            Value: ai-ops-mvp
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+    OpsAlertsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ops-alerts-${self:provider.stage}
+        DisplayName: AI Ops Alerts
+        Tags:
+          - Key: Project
+            Value: ai-ops-mvp
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+  Outputs:
+    ServiceEndpoint:
+      Description: API Gateway endpoint URL
+      Value:
+        Fn::Join:
+          - ''
+          - - https://
+            - !Ref ApiGatewayRestApi
+            - .execute-api.
+            - ${self:provider.region}
+            - .amazonaws.com/
+            - ${self:provider.stage}
+    
+    MetricsTableName:
+      Description: Metrics DynamoDB Table Name
+      Value: ${self:custom.tables.metrics}
+      Export:
+        Name: ${self:provider.stage}-MetricsTableName
+    
+    AlertsTableName:
+      Description: Alerts DynamoDB Table Name
+      Value: ${self:custom.tables.alerts}
+      Export:
+        Name: ${self:provider.stage}-AlertsTableName
+    
+    SnsTopicArn:
+      Description: SNS Topic ARN
+      Value: 
+        Ref: OpsAlertsTopic
+      Export:
+        Name: ${self:provider.stage}-SnsTopicArn
+
+plugins:
+  - serverless-offline

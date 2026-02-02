@@ -1,5 +1,5 @@
 # AI Ops Copilot MVP
-LIVE AWS LINK:-http://35.88.110.174:8501
+LIVE AWS LINK:-http://ai-ops-frontend-dev.s3-website-us-east-1.amazonaws.com/
 
 AWS Serverless AI Operations Copilot for Swap Station Operations.
 
